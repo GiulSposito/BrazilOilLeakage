@@ -27,6 +27,10 @@ doc_list <- updates %>%
   mutate(date=dmy(date)) %>%
   as_tibble()  
 
+# check existence of destination folders
+if(!file.exists("./data")) dir.create("./data")
+if(!file.exists("./data/raw")) dir.create("./data/raw")
+
 # download xlsx files
 filenames <- doc_list %>% 
   filter(type=="XLSX") %>% 
