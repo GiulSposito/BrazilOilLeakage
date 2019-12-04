@@ -3,6 +3,8 @@ library(rvest)
 library(lubridate)
 library(glue)
 
+##### SCRAP #####
+
 # scrap and build url table
 base_url <- "http://www.ibama.gov.br"
 
@@ -28,9 +30,18 @@ doc_list <- updates %>%
   mutate( date=dmy(date) ) %>%
   as_tibble()
 
+##### FILE DOWNLOAD #####
+
 # check existence of destination folders
 if(!file.exists("./data")) dir.create("./data")
 if(!file.exists("./data/raw")) dir.create("./data/raw")
+
+# check the existence of a previous download
+if(!file.exists("./data/scrapped_doclist.rds")) saveRDS(doc_list, "./data/scrapped_doclist.rds")
+
+# TODO: if there is a previous download this file must do incremental download
+
+##### EXCEL DOWNLOAD ##### 
 
 # download xlsx files
 xlsx_filenames <- doc_list %>% 
@@ -52,6 +63,8 @@ xlsx_index <- doc_list %>%
 
 # save it
 saveRDS(xlsx_index, "./data/excel_file_index.rds")
+
+##### PDF DOWNLOAD #####
 
 # download the PDF files for days where there is no XLSX file.
 pdf_filenames <- doc_list %>% 
