@@ -23,18 +23,20 @@ doc_links <- page %>%
 doc_list <- updates %>% 
   set_names(c("date","description","items")) %>% 
   mutate( type = str_extract(items, "^[\\w]+") ) %>% 
+  mutate( type = ifelse(type=="XLS","XLSX", type)) %>% # one file with "xls" extension
   mutate( link = paste0(base_url, doc_links) ) %>% 
-  mutate(date=dmy(date)) %>%
-  as_tibble()  
+  mutate( date=dmy(date) ) %>%
+  as_tibble()
 
 # check existence of destination folders
 if(!file.exists("./data")) dir.create("./data")
 if(!file.exists("./data/raw")) dir.create("./data/raw")
 
 # download xlsx files
-filenames <- doc_list %>% 
+xlsx_filenames <- doc_list %>% 
   filter(type=="XLSX") %>% 
   select(date, link) %>% 
+  arrange(date) %>% 
   split(1:nrow(.)) %>% 
   map_chr(function(.x){
     filename <- paste0("./data/raw/",as.character(.x$date[1]), ".xlsx")
@@ -45,7 +47,37 @@ filenames <- doc_list %>%
 # save an excel index
 xlsx_index <- doc_list %>% 
   filter( type=="XLSX" ) %>% 
-  mutate( filename = filenames )
+  arrange(date) %>% 
+  mutate( filename = xlsx_filenames )
 
 # save it
-saveRDS(xlsx_index, "./data/excel_index.rds")
+saveRDS(xlsx_index, "./data/excel_file_index.rds")
+
+# download the PDF files for days where there is no XLSX file.
+pdf_filenames <- doc_list %>% 
+  # get the PDFs
+  filter(type=="PDF") %>% 
+  # in dates with no XLSX equivalent
+  anti_join(filter(doc_list, type=="XLSX"), by="date") %>% 
+  arrange(date) %>% 
+  select(date, link) %>% 
+  split(1:nrow(.)) %>% 
+  map_chr(function(.x){
+    filename <- paste0("./data/raw/",as.character(.x$date[1]), ".pdf")
+    download.file(url=.x$link[1], destfile = filename, mode = "wb")
+    return(filename)
+  })
+
+# save an pdf file index
+pdf_index <- doc_list %>% 
+  # get the PDFs
+  filter(type=="PDF") %>% 
+  # in dates with no XLSX equivalent
+  anti_join(filter(doc_list, type=="XLSX"), by="date") %>% 
+  arrange(date) %>%
+  mutate( filename = pdf_filenames )
+
+# save it
+saveRDS(pdf_index, "./data/pdf_file_index.rds")
+
+
