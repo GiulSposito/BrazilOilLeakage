@@ -38,7 +38,8 @@ statusToFactor <- function(.status){
 }
 
 # lendo arquivo de diritorio de excel
-xlsx_index <- readRDS("./data/excel_index.rds")
+xlsx_index <- readRDS("./data/excel_file_index.rds") %>% 
+  arrange(date)
 
 # importa cada um dos excels (demora)
 files <- xlsx_index %>%
@@ -109,7 +110,9 @@ manchas <- files %>%
 # trata casos onde o estado esta incorreto
 # (as vezes sigla as vezes nome)
 # primeiro cria uma tabela de para estado/sigla
-estado_uf <- files[[1]] %>% 
+estado_uf <- files %>% 
+  tail(1) %>% 
+  .[[1]] %>% 
   mutate(
     estado = iconv(estado, from="UTF-8", to="LATIN1")
   ) %>% 
