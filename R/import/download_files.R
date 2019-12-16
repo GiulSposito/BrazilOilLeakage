@@ -37,7 +37,9 @@ if(!file.exists("./data")) dir.create("./data")
 if(!file.exists("./data/raw")) dir.create("./data/raw")
 
 # check the existence of a previous download
-if(!file.exists("./data/scrapped_doclist.rds")) saveRDS(doc_list, "./data/scrapped_doclist.rds")
+# if(!file.exists("./data/scrapped_doclist.rds")) 
+
+saveRDS(doc_list, "./data/scrapped_doclist.rds")
 
 # TODO: if there is a previous download this file must do incremental download
 
