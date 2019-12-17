@@ -220,31 +220,32 @@ statusToFactor <- function(.status){
   tibble( from_status = tolower(.status) )  %>% 
     mutate(
       to_status = case_when(
-        str_detect(from_status, "manchas")   ~ "Manchas",
-        str_detect(from_status, "esparsos")  ~ "Vestígios/Esparsos",
-        str_detect(from_status, "observado") ~ "Não Observado",
+        str_detect(from_status, "manchas")   ~ "stains",
+        str_detect(from_status, "esparsos")  ~ "traces/sparse",
+        str_detect(from_status, "observado") ~ "not observed",
         T ~ as.character(NA)
       )
     ) %>% 
-    mutate( fct_status = factor(to_status, levels = c("Não Observado", "Vestígios/Esparsos", "Manchas"), ordered = T) ) %>% 
+    mutate( fct_status = factor(to_status, levels = c("not observed", "traces/sparse", "stains"), ordered = T) ) %>% 
     pull(fct_status) %>% 
     return()
 }
 
-# lê o cache
+# read the raw excel importation
 files <- readRDS("./data/oil_leakage_imported_raw_excel.rds")
 
-# junta os excels in um unico dataframe
-manchas_raw <- files %>% 
-  # o arquivo do dia 2019-11-06 nao tem coordenadas
+# put all the excels in one dataframe
+# perform a data cleanup
+stains_raw <- files %>% 
+  # the file form day 2019-11-06 hasn't coordinates
   keep(function(.x){ .x$file.date[1] != "2019-11-06"} ) %>% 
-  # para cada dataframe
+  # for each "excel" data
   map_df(function(.x){
     
     # some excels have two "municipio" columns
     if("municipio_" %in% names(.x)) .x <- select(.x, -municipio)
     
-    # limpa os nomes das colunas
+    # clean and normalize colnames
     col.names <- .x %>%
       names() %>% 
       tolower() %>%
@@ -252,44 +253,39 @@ manchas_raw <- files %>%
       str_replace_all("name", "localidade") %>% 
       str_replace_all("latitutde","latitude")
     
-    # novos nomes e colunas de interesse
+    # rename the cols and select what we'll use
     .x %>% 
       set_names(col.names) %>% 
       select(file.date, localidade, municipio, 
              estado, data_avist, data_revis,
              latitude, longitude, status) %>% 
       
-      # trata pontuacao e tipagem
+      # handle portuguese accents
       mutate(
         localidade = iconv(localidade, from="UTF-8", to="LATIN1"),
         municipio  = iconv(municipio, from="UTF-8", to="LATIN1"),
         estado     = iconv(estado, from="UTF-8", to="LATIN1"),
         status     = iconv(status, from="UTF-8", to="LATIN1"),
-        # status     = statusToFactor(status),
         data_avist = ymd(as.character(data_avist)), 
         data_revis = ymd(as.character(data_revis))
       ) %>% 
-      
-      # retorna um dataset padronizado
-      # para ser concatenado num so
       return()
   })
 
-manchas_coord <- manchas_raw %>%   
-  # converte cordenadas de string para decimal
+# we have to translate degree coordinates to decimal
+stains_coord <- stains_raw %>%   
   mutate(
     lat.degree = translateCoord(latitude),
     lon.degree = translateCoord(longitude)
   ) %>% 
-  # trata casos em que a coordenada ja esta decimal
+  # in some of the files, the coordinates are indeed in decimal 
   mutate(
     lat.degree = ifelse(is.na(lat.degree), as.numeric(latitude), lat.degree),
     lon.degree = ifelse(is.na(lon.degree), as.numeric(longitude), lon.degree)
   )
 
-# trata casos onde o estado esta incorreto
-# (as vezes sigla as vezes nome)
-# primeiro cria uma tabela de para estado/sigla
+# in some files, the "UF" column has the name of the states 
+# and others the code of states, we handle this making a name<->code table
 estado_uf <- files %>% 
   tail(1) %>% 
   .[[1]] %>% 
@@ -300,32 +296,44 @@ estado_uf <- files %>%
   distinct() %>% 
   arrange(estado)
 
-# adiciona sigla com base no nome do estado
-manchas_clean <- manchas_coord %>% 
+# join the state name<->code table
+stains_clean <- stains_coord %>% 
   left_join(estado_uf, by = "estado") %>% 
-  # ha casos em que o campo estado tem sigla, entao uso o prorio
+  # handle when the info is correct/incorrect
   mutate(sigla_uf = ifelse(is.na(sigla_uf),estado,sigla_uf)) %>% 
-  # sete casos sem info de estado
+  # there is files without state code
   filter(!is.na(sigla_uf)) %>% 
   select(-estado) %>% 
-  # recompoe o nome do estado
+  # rebuild state name
   inner_join(estado_uf, by="sigla_uf") %>% 
-  # pega colunas de interesse e salva arquivo de trabalho
+  # reselect only interesting cols
   select(file.date, data_avist, data_revis, sigla_uf, estado, municipio, localidade, lat.degree, lon.degree, status)
 
-manchas <- manchas_clean %>% 
-  mutate( status = statusToFactor(status) )
+# transform the "status" info in a factor column
+stains <- stains_clean %>% 
+  mutate( status = statusToFactor(status) ) %>% 
+  filter(complete.cases(.)) %>% 
+  # english col names
+  set_names(c("file.date", "sighting_date","revision_date","uf","state","county",
+              "localidade","lat.degree","lon.degree","status"))
 
-saveRDS(manchas, "./data/oil_leakage.rds")
+# save it, just in case
+saveRDS(stains, "./data/oil_leakage.rds")
 
 ```
 
-## Data Exploring
+## `ggmap package`
+
+Agora nós temos todos os dados dos arquivos excels concatenados, limpos e tratados, vamos olhar o formato final
+
+```{r seeDataset}
+
+# checking the final format
+stains
+
+```
 
 
-## `ggmap` Package
-
-
-## `gganimation` Package
+## `gganimation package`
 
 
