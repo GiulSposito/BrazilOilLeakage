@@ -322,17 +322,48 @@ saveRDS(stains, "./data/oil_leakage.rds")
 
 ```
 
-## `ggmap package`
-
-Agora nós temos todos os dados dos arquivos excels concatenados, limpos e tratados, vamos olhar o formato final
+Agora nós temos todos os dados dos arquivos excels concatenados, limpos e tratados, vamos olhar o formato final.
 
 ```{r seeDataset}
 
 # checking the final format
-stains
-
+stains %>% 
+  head(10) %>% 
+  kable() %>% 
+  kable_styling(font_size = 8)
 ```
 
+## `ggmap package`
+
+Com os dados na mão, vamos tentar visualizar a comunidades afetadas pelo vazamento de óleo colocando os dados em um map, há vários frameworks para plotar maps em R, neste post vamos usar o [pacote `ggmap`](https://cran.r-project.org/web/packages/ggmap/index.html), que já utilizamos [anteriormente no passado](https://yetanotheriteration.netlify.com/2018/01/ploting-your-mtb-track-with-r/).
+
+```{r ggmapTest, warning=FALSE, message=FALSE}
+
+library(ggmap)
+library(yaml)
+
+# before use ggmap with google maps it's necessary
+# read and register a Key for Google Map API
+config <- yaml::read_yaml("./config.yml")
+register_google(key=config$google_map_key)
+
+stains_on_date <- stains %>%
+    filter(status!="not observed", 
+           revision_date == ymd(20191001),
+           lon.degree <0) 
+
+bbox <- make_bbox(lon = stains_on_date$lon.degree, lat=stains_on_date$lat.degree, f = .1)
+gmap <- get_map(location=bbox, source="google", maptype="terrain")
+
+ggmap(gmap) +
+  geom_point(data=stains, 
+             aes(x=lon.degree, y=lat.degree, color=status), size=2, alpha=.5) +
+  scale_color_manual(values=c("black","darkgrey","green")) +
+  theme_void() +
+  ggplot2::coord_fixed() +
+  theme( legend.position = "none")
+
+```
 
 ## `gganimation package`
 
