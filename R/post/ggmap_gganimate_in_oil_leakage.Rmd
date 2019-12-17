@@ -1,0 +1,331 @@
+---
+title: "Using ggmap and gganimation to visualize oil leakage in Brazil"
+output:
+  html_document:
+    df_print: paged
+---
+
+Um derrame de petróleo cru que atingiu mais de 2 mil quilômetros do litoral das regiões Nordeste e Sudeste do Brasil, afetando mais de 400 praias em mais de 200 municípios diferentes. Os primeiros registros do derrame ocorreram no fim do mês de agosto de 2019 com avistamentos que ainda se alastram neste fim do ano. Este post expora os registros de avistamento disponíveis no site do IBAMA para visualizar o impacto do vazamento usando ggmap e gganimation.
+
+<!--more--> 
+
+Um derrame de petróleo cr que atingiu mais de 2 mil quilômetros do litoral das regiões Nordeste e Sudeste do Brasil, afetando mais de 400 praias em mais de 200 municípios diferentes. Os primeiros registros do derrame ocorreram no fim do mês de agosto de 2019 com avistamentos que ainda se alastram neste fim do ano. Mais de mil toneladas de óleo já foram recolhidas das praias, sendo este, portando, o pior vazamento de ólio na história do Brazil e o maior desastre ambiental já registrado na costa brasileira.
+
+[derrame de petróleo cru](https://en.wikipedia.org/wiki/2019_Northeast_Brazil_oil_spill)
+
+Neste post exploraremos os dados de avistamento de óleo disponíveis no site do IBAMA - Instituto Brasileiro do Meio Ambiente e dos Recursos Naturais Renovaveis, órgão do Ministério do Meio Ambiente que é órgão estatal responsável pela execução das políticas de preservação ambiental federal, para visualizar a evolução do vasamento usando os pacotes `ggmap` e `gganimation`.
+
+[dados de avistamento de óleo](http://www.ibama.gov.br/manchasdeoleo)
+[IBAMA - Instituto Brasileiro do Meio Ambiente e dos Recursos Naturais Renovaveis](http://www.ibama.gov.br)
+[Ministério do Meio Ambiente](https://www.mma.gov.br/)
+
+```{r setup, echo=FALSE}
+# put rnotebook in the same workdir
+knitr::opts_knit$set(root.dir = normalizePath(rprojroot::find_rstudio_root_file())) 
+```
+
+## Site and Dataset
+
+O IBAMA disponibilizou informações específicas do vazamento de óleo em uma subsessão de seu site, mantendo um registro dos status e dos avistamentos de manchas atualizado diariamente.
+
+[seu site](http://www.ibama.gov.br/manchasdeoleo-localidades-atingidas)
+[registro dos status e dos avistamentos](http://www.ibama.gov.br/manchasdeoleo-localidades-atingidas)
+
+Parte dos registros estão em formato do PDF, mas parte deles estão disponibilizados em formato excel, trazendo as seguintes informações: o nome de cada localidade em que já houve avistamento de manchas, município, data do primeiro avistamento, estado, latitude, longitude, data em que a localidade foi revisitada e status do local no momento.
+
+## Data Scrapping
+
+Embora o site disponbilize PDFs e XLXS, e seja possível explorar a tabela de avistamentos dentros do PDFs atraves do pacote `tabulizer`, neste post vamos apenas explorar o conteúdo dos arquivos em formato excel. O primeiro passo para tal é fazer o "scrapping" da página que disponibiliza os dados para extraír os links e baixar os arquivos.
+
+```{r excelScrapping, eval=FALSE}
+library(tidyverse)  # of course
+library(rvest)      # to handle html scrapping
+library(lubridate)  # handle datetime formats
+library(glue)       # easily concat texts
+library(knitr)      # markdown output tables
+library(kableExtra) # formate markdown tables
+
+# scrap and build url table
+base_url <- "http://www.ibama.gov.br"
+
+# page with update table
+page <- read_html("http://www.ibama.gov.br/manchasdeoleo-localidades-atingidas")
+
+# get the table
+updates <- page %>% 
+  html_table() %>% 
+  .[[1]]
+
+# get the href links
+doc_links <- page %>%
+  html_nodes(xpath = "//td/a") %>% 
+  html_attr("href")
+
+# put then togheter
+doc_list <- updates %>% 
+  set_names(c("date","description","items")) %>% 
+  mutate( type = str_extract(items, "^[\\w]+") ) %>% 
+  mutate( type = ifelse(type=="XLS","XLSX", type)) %>% # one file with "xls" extension
+  mutate( link = paste0(base_url, doc_links) ) %>% 
+  mutate( date=dmy(date) ) %>%
+  as_tibble()
+
+# save it, just in case we want to recover later
+saveRDS(doc_list,"./data/oil_leakage_doc_list.rds")
+
+# let's see the links list
+doc_list %>% 
+  head(10) %>% 
+  kable() %>% 
+  kableExtra::kable_styling(font_size = 10)
+
+```
+
+
+```{r readDocList, echo=FALSE, warning=FALSE, message=FALSE}
+library(tidyverse)  # of course
+library(rvest)      # to handle html scrapping
+library(lubridate)  # handle datetime formats
+library(glue)       # easily concat texts
+library(knitr)      # markdown output tables
+library(kableExtra) # formate markdown tables
+
+# reading from cache
+doc_list <- readRDS("./data/oil_leakage_doc_list.rds")
+
+# let's see the links list
+doc_list %>% 
+  head(10) %>% 
+  kable() %>% 
+  kableExtra::kable_styling(font_size = 10)
+```
+
+Agora que temos os links em mãos, vamos fazer o download dos arquivos XLSX.
+
+```{r excelDownload, eval=FALSE, message=FALSE, warning=FALSE}
+# check the pre existence of destination folders
+XLSX_DEST_FOLDER <- "./data/oil_leakage_raw"
+if(!file.exists("./data")) dir.create("./data")
+if(!file.exists(XLSX_DEST_FOLDER)) dir.create(XLSX_DEST_FOLDER)
+
+# download xlsx files
+xlsx_filenames <- doc_list %>% 
+  filter(type=="XLSX") %>% 
+  select(date, link) %>% 
+  arrange(date) %>% 
+  split(1:nrow(.)) %>% 
+  map_chr(function(.x){
+    filename <- paste0(XLSX_DEST_FOLDER, "/",as.character(.x$date[1]), ".xlsx")
+    download.file(url=.x$link[1], destfile = filename, mode = "wb")
+    return(filename)
+  })
+
+# save an excel filename index
+xlsx_index <- doc_list %>% 
+  filter( type=="XLSX" ) %>% 
+  arrange(date) %>% 
+  mutate( filename = xlsx_filenames )
+
+# save it
+saveRDS(xlsx_index, "./data/excel_file_index.rds")
+
+# let's see what we have
+xlsx_index %>% 
+  head(10) %>% 
+  kable() %>% 
+  kable_styling(font_size = 9)
+```
+
+```{r readFileIndex, echo=FALSE}
+xlsx_index <- readRDS("./data/excel_file_index.rds")
+
+# let's see what we have
+xlsx_index %>% 
+  head(10) %>% 
+  kable() %>% 
+  kable_styling(font_size = 9)
+```
+
+## Import Data
+
+Vamos usar o pacote `xlsx` para ler os arquivos excels e importá-los num `data.frame`. Vamos dar uma olhada em um deles.
+
+```{r viewXLSX}
+library(xlsx) # import excel files (requires java/rjava)
+
+xlsx_file <- read.xlsx(file = "./data/oil_leakage_raw/2019-12-14.xlsx",sheetIndex = 1)
+
+xlsx_file %>% 
+  head(10) %>% 
+  kable() %>% 
+  kable_styling(font_size = 10)
+
+```
+
+Podemos ver que o arquivo contém: um _geocode_, o nome de cada localidade em que já houve avistamento de manchas, um _id_ para a localidade, o nome do município, nome do estado e sigla da unidade da federação, a data do primeiro avistamento, a data da revisão (última posição do status), a informação sobre o estado da localidade quanto ao vazamento, latitude e longitude, além de uma "hora" e de uma coluna "cou" desconhecida.
+
+Para utilizar os arquivos, serãop necessários resolver o encoding, fatorizar o status, e transformar as notações de grau para latitude e longitude em notação decimal.
+
+### Importation 
+
+A importação dos arquivos é direta, primeiro vamos importar todos os arquivos e então fazer o tratamento e limpeza dos dados
+
+```{r xlsxImport, eval=FALSE, message=FALSE, warning=FALSE}
+
+# import each xlsx_file
+files <- xlsx_index %>%
+  split(1:nrow(.)) %>% 
+  map(function(.x){
+    print(.x$filename)
+    read.xlsx(file = .x$filename[1], sheetIndex = 1, colClasses="character", stringsAsFactors=F) %>% 
+      as_tibble() %>% 
+      mutate(file.date=.x$date[1])
+  })
+
+# save it as cache
+saveRDS(files, "./data/oil_leakage_imported_raw_excel.rds")
+
+```
+
+### Data Clean-up
+
+```{r dataCleanup, message=FALSE, warning=FALSE}
+
+# auxiliary function to translate the degree coordinates to decimal coordinates
+translateCoord <- function(.coords){
+  
+  # extract orientation (N,S,W,E)
+  directions <- str_extract(.coords,"\\w$")
+  
+  # split the numbers and rebuilds as xxDyy'zz"
+  numbers <- .coords %>% 
+    str_extract_all("(\\d\\.*)+") %>% 
+    purrr::map(~paste0(.x[1],"d",.x[2],"'",.x[3],"\""))
+  
+  # modify char2dms to a safity call
+  safe_char2dms <- safely(sp::char2dms, otherwise = NA)
+  
+  # readd orientation(NSWE) and converts to decimal
+  numbers %>% 
+    purrr::map2(directions, ~paste0(.x, .y)) %>% 
+    purrr::map(safe_char2dms) %>% 
+    purrr::map(purrr::pluck("result")) %>% 
+    purrr::map(as.numeric) %>% 
+    unlist() %>% 
+    return()
+}
+
+# clean ant transform status data in to ordenated factor
+statusToFactor <- function(.status){
+  tibble( from_status = tolower(.status) )  %>% 
+    mutate(
+      to_status = case_when(
+        str_detect(from_status, "manchas")   ~ "Manchas",
+        str_detect(from_status, "esparsos")  ~ "Vestígios/Esparsos",
+        str_detect(from_status, "observado") ~ "Não Observado",
+        T ~ as.character(NA)
+      )
+    ) %>% 
+    mutate( fct_status = factor(to_status, levels = c("Não Observado", "Vestígios/Esparsos", "Manchas"), ordered = T) ) %>% 
+    pull(fct_status) %>% 
+    return()
+}
+
+# lê o cache
+files <- readRDS("./data/oil_leakage_imported_raw_excel.rds")
+
+# junta os excels in um unico dataframe
+manchas_raw <- files %>% 
+  # o arquivo do dia 2019-11-06 nao tem coordenadas
+  keep(function(.x){ .x$file.date[1] != "2019-11-06"} ) %>% 
+  # para cada dataframe
+  map_df(function(.x){
+    
+    # some excels have two "municipio" columns
+    if("municipio_" %in% names(.x)) .x <- select(.x, -municipio)
+    
+    # limpa os nomes das colunas
+    col.names <- .x %>%
+      names() %>% 
+      tolower() %>%
+      str_replace_all("munic.+pi.*", "municipio") %>% # acento no municipio 
+      str_replace_all("name", "localidade") %>% 
+      str_replace_all("latitutde","latitude")
+    
+    # novos nomes e colunas de interesse
+    .x %>% 
+      set_names(col.names) %>% 
+      select(file.date, localidade, municipio, 
+             estado, data_avist, data_revis,
+             latitude, longitude, status) %>% 
+      
+      # trata pontuacao e tipagem
+      mutate(
+        localidade = iconv(localidade, from="UTF-8", to="LATIN1"),
+        municipio  = iconv(municipio, from="UTF-8", to="LATIN1"),
+        estado     = iconv(estado, from="UTF-8", to="LATIN1"),
+        status     = iconv(status, from="UTF-8", to="LATIN1"),
+        # status     = statusToFactor(status),
+        data_avist = ymd(as.character(data_avist)), 
+        data_revis = ymd(as.character(data_revis))
+      ) %>% 
+      
+      # retorna um dataset padronizado
+      # para ser concatenado num so
+      return()
+  })
+
+manchas_coord <- manchas_raw %>%   
+  # converte cordenadas de string para decimal
+  mutate(
+    lat.degree = translateCoord(latitude),
+    lon.degree = translateCoord(longitude)
+  ) %>% 
+  # trata casos em que a coordenada ja esta decimal
+  mutate(
+    lat.degree = ifelse(is.na(lat.degree), as.numeric(latitude), lat.degree),
+    lon.degree = ifelse(is.na(lon.degree), as.numeric(longitude), lon.degree)
+  )
+
+# trata casos onde o estado esta incorreto
+# (as vezes sigla as vezes nome)
+# primeiro cria uma tabela de para estado/sigla
+estado_uf <- files %>% 
+  tail(1) %>% 
+  .[[1]] %>% 
+  mutate(
+    estado = iconv(estado, from="UTF-8", to="LATIN1")
+  ) %>% 
+  select(estado, sigla_uf) %>% 
+  distinct() %>% 
+  arrange(estado)
+
+# adiciona sigla com base no nome do estado
+manchas_clean <- manchas_coord %>% 
+  left_join(estado_uf, by = "estado") %>% 
+  # ha casos em que o campo estado tem sigla, entao uso o prorio
+  mutate(sigla_uf = ifelse(is.na(sigla_uf),estado,sigla_uf)) %>% 
+  # sete casos sem info de estado
+  filter(!is.na(sigla_uf)) %>% 
+  select(-estado) %>% 
+  # recompoe o nome do estado
+  inner_join(estado_uf, by="sigla_uf") %>% 
+  # pega colunas de interesse e salva arquivo de trabalho
+  select(file.date, data_avist, data_revis, sigla_uf, estado, municipio, localidade, lat.degree, lon.degree, status)
+
+manchas <- manchas_clean %>% 
+  mutate( status = statusToFactor(status) )
+
+saveRDS(manchas, "./data/oil_leakage.rds")
+
+```
+
+## Data Exploring
+
+
+## `ggmap` Package
+
+
+## `gganimation` Package
+
+
