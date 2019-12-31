@@ -9,10 +9,10 @@ In 2019, a crude oil spill struck more than 2,000 kilometers off the coast of Br
 
 <!--more--> 
 
-In 2019, [a crude oil spill](https://en.wikipedia.org/wiki/2019_Northeast_Brazil_oil_spill) struck more than 2,000 kilometers off the coast of Brazil's Northeast and Southeast, affecting more than 400 beaches in more than 200 different municipalities. The first reports of the spill occurred at the end of August with sightings still spreading later this year. More than a thousand tons of oil have already been collected from the beaches, which is the worst oil leak in Brazil's history and the largest environmental disaster on the Brazilian coast.
+In 2019, [a crude oil spill](https://en.wikipedia.org/wiki/2019_Northeast_Brazil_oil_spill) struck more than 2,000 kilometers off the coast of Brazil's Northeast and Southeast, affecting more than 400 beaches in more than 200 different municipalities. The first reports of the spill occurred at the end of August with sightings still spreading later this year. More than a thousand tons of oil have already been collected from the beaches, which is the worst oil leak in Brazil's history and the largest environmental disaster on the Brazilian coastline.
 
 
-In this post we will explore the oil sighting [data available](http://www.ibama.gov.br/manchasdeoleo) on the [IBAMA](http://www.ibama.gov.br) website (the Brazilian Institute of the Environment and Renewable Natural Resources), a state agency from the [Ministry of the Environment](https://www.mma.gov.br/) responsible for implementing federal environmental preservation policies. We'll try to view the oil spill extension and evolution using the `ggmap` and` gganimation` R packages.
+In this post we will explore [the oil sighting data](http://www.ibama.gov.br/manchasdeoleo), published on the [IBAMA](http://www.ibama.gov.br) website (the Brazilian Institute of the Environment and Renewable Natural Resources), a state agency from the [Ministry of the Environment](https://www.mma.gov.br/) responsible for implementing federal environmental preservation policies. We'll try to view the oil spill extension and evolution using the `ggmap` and` gganimation` R packages.
 
 ```{r setup, echo=FALSE}
 # put rnotebook in the same workdir
@@ -23,11 +23,11 @@ In this post we will explore the oil sighting [data available](http://www.ibama.
 
 IBAMA has made the oil spill data and information available on a [subsection of its site](http://www.ibama.gov.br/manchasdeoleo-localidades-atingidas), keeping a [daily record of status](http://www.ibama.gov.br/manchasdeoleo-localidades-atingidas) and spotting sightings.
 
-Part of the records provided are available in excel format, containing the following information: the name of each spotted location, the county, the date of first sighting, the state, latitude, longitude, date where the location was revisited and oil spill status at the moment.
+Part of the records provided are available in excel format, and according with it's description, the files contain: the name of each spotted location, the county, the date of first sighting, the state, latitude, longitude, date where the location was revisited and oil spill status at the moment.
 
 ## Data Scrapping
 
-Although the site offers PDFs and XLXS, and it is possible to explore the table of sightings within PDFs through the [`tabulizer` package](https://cran.r-project.org/web/packages/tabulizer/vignettes/tabulizer.html), in this post we will only explore the contents of files in excel format. The first step to this is to scrap the page that provides the data to extract the links to download the XLSX files, we'll use [`rvest` package](https://www.datacamp.com/community/tutorials/r-web-scraping-rvest).
+Although the site offers PDF and XLXS, and it is possible to explore the sightings table within PDF files through the [`tabulizer` package](https://cran.r-project.org/web/packages/tabulizer/vignettes/tabulizer.html), in this post we'll only explore the contents of the excel files. The first step to this is to scrap the page that provides the files to download, to extract its links, we'll use [`rvest` package](https://www.datacamp.com/community/tutorials/r-web-scraping-rvest) to do this job.
 
 ```{r excelScrapping, eval=FALSE}
 library(tidyverse)  # of course
@@ -156,11 +156,11 @@ xlsx_file %>%
 
 We can see that the file contains: a _geocode_, the name of each location, a _id_ for that spot, the county name, state name and federation unit acronym, the date of the first spill sighting, the revision date (last status position), the current information about the spill state of the locality, latitude and longitude, plus an "hour" and an unknown `cou` column.
 
-To use the files, you will need to resolve encoding, transform status in a factor, and turn degree notations for latitude and longitude into decimal notation.
+Attention: note every excel files has the same format, the code bellow handles some differences between then.
+
+To read the files and use its data, we have to clean then first: resolving encoding, transforming the status information in a factor class, and turn the degree notations for latitude and longitude into decimal notation.
 
 ### Importation 
-
-Importing the files is straightforward, first let's import all the files and then do the data processing.
 
 ```{r xlsxImport, eval=FALSE, message=FALSE, warning=FALSE}
 
@@ -321,7 +321,7 @@ saveRDS(stains, "./data/oil_leakage.rds")
 
 ```
 
-Now we have all the data from the excel files concatenated, cleaned and treated, let's look at the final data format.
+Now we have all the data from the excel files concatenated, cleaned, treated and stored in a data.frame, let's look at the final data format.
 
 ```{r seeDataset}
 
@@ -336,9 +336,9 @@ stains %>%
 
 ## `ggmap package`
 
-With the data in hand, we' wi'll try to visualize the communities affected by the oil spill by placing the data in a map. There are several frameworks for plotting maps in R, in this post we will use the [`ggmap` package](https://www.littlemissdata.com/blog/maps), which we have used [previously in the past](https://yetanotheriteration.netlify.com/2018/01/ploting-your-mtb-track-with-r/).
+With the data in hand, we'll try to visualize the communities affected by the oil spill placing the data in a map. There are several frameworks for plotting maps in R, in this post we will use the [`ggmap` package](https://www.littlemissdata.com/blog/maps), which we already have used [previously in the past](https://yetanotheriteration.netlify.com/2018/01/ploting-your-mtb-track-with-r/).
 
-Before to use ggmap, you'll need to get the Google Map API Key and register it, but the procedure is pretty straightforward, [just follow the instructions](https://developers.google.com/maps/documentation/embed/get-api-key). In my code, I always store the keys in a [`yalm` file](https://en.wikipedia.org/wiki/YAML), to avoid accidentaly to publish in the GitHub, [I also commented this strategy in a older post](https://yetanotheriteration.netlify.com/2019/03/comparing-fitbit-and-polar-h7-heart-rate-data/). 
+Before to use `ggmap`, we'll need to get the Google Map API Key and register it, but the procedure is pretty straightforward, [just following these instructions](https://developers.google.com/maps/documentation/embed/get-api-key). In my code, I always store the keys and others sensible information in [`yalm` files](https://en.wikipedia.org/wiki/YAML) to avoid accidentaly publish then in the GitHub, [I also commented about this strategy in a older post](https://yetanotheriteration.netlify.com/2019/03/comparing-fitbit-and-polar-h7-heart-rate-data/). 
 
 
 ```{r ggmapTest, warning=FALSE, message=FALSE}
@@ -367,7 +367,7 @@ ggmap(gmap) +
 
 ## `gganimate` package
 
-Now the last step is to animate the map in the time dimension, we'll do this using the great [`gganimate` package](https://gganimate.com/articles/gganimate.html), adding a transition function in the `ggplot2/ggmap` stack.
+Now the last step is to animate the map in the time dimension, we'll do this using the great [`gganimate` package](https://gganimate.com/articles/gganimate.html), adding a transition function in the `ggplot2 + ggmap` stack.
 
 ```{r animation, warning=FALSE, message=FALSE}
 library(gganimate)
@@ -395,7 +395,7 @@ anim
 
 ## Visualizing the spill evolution in one plot
 
-The animated map view gives us an idea of the size of the ecological impact of the oil spill off the coast of Brazil, but the animation does not allow you to see the full evolution history at the same time,  to allow us to gauge how the spill is progressing. 
+The animated map view gives us an great idea of the size of the ecological impact of the oil spill off the coast of Brazil. But to analytical purpose the animation does not allow you to see the full evolution history at one same time, allowing us to gauge how the spill is progressing. 
 
 To do this trick, let's plot the information as a heatmap, where each location will be on the Y axis, indexed by its latitude, and on the X axis we'll use the date information.
 
