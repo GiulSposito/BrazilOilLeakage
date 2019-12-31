@@ -154,13 +154,13 @@ xlsx_file %>%
 
 ```
 
-Podemos ver que o arquivo contém: um _geocode_, o nome de cada localidade em que já houve avistamento de manchas, um _id_ para a localidade, o nome do município, nome do estado e sigla da unidade da federação, a data do primeiro avistamento, a data da revisão (última posição do status), a informação sobre o estado da localidade quanto ao vazamento, latitude e longitude, além de uma "hora" e de uma coluna "cou" desconhecida.
+We can see that the file contains: a _geocode_, the name of each location, a _id_ for that spot, the county name, state name and federation unit acronym, the date of the first spill sighting, the revision date (last status position), the current information about the spill state of the locality, latitude and longitude, plus an "hour" and an unknown `cou` column.
 
-Para utilizar os arquivos, serãop necessários resolver o encoding, fatorizar o status, e transformar as notações de grau para latitude e longitude em notação decimal.
+To use the files, you will need to resolve encoding, transform status in a factor, and turn degree notations for latitude and longitude into decimal notation.
 
 ### Importation 
 
-A importação dos arquivos é direta, primeiro vamos importar todos os arquivos e então fazer o tratamento e limpeza dos dados
+Importing the files is straightforward, first let's import all the files and then do the data processing.
 
 ```{r xlsxImport, eval=FALSE, message=FALSE, warning=FALSE}
 
@@ -321,7 +321,7 @@ saveRDS(stains, "./data/oil_leakage.rds")
 
 ```
 
-Agora nós temos todos os dados dos arquivos excels concatenados, limpos e tratados, vamos olhar o formato final.
+Now we have all the data from the excel files concatenated, cleaned and treated, let's look at the final data format.
 
 ```{r seeDataset}
 
@@ -336,7 +336,10 @@ stains %>%
 
 ## `ggmap package`
 
-Com os dados na mão, vamos tentar visualizar a comunidades afetadas pelo vazamento de óleo colocando os dados em um map, há vários frameworks para plotar maps em R, neste post vamos usar o [pacote `ggmap`](https://cran.r-project.org/web/packages/ggmap/index.html), que já utilizamos [anteriormente no passado](https://yetanotheriteration.netlify.com/2018/01/ploting-your-mtb-track-with-r/).
+With the data in hand, we' wi'll try to visualize the communities affected by the oil spill by placing the data in a map. There are several frameworks for plotting maps in R, in this post we will use the [`ggmap` package](https://www.littlemissdata.com/blog/maps), which we have used [previously in the past](https://yetanotheriteration.netlify.com/2018/01/ploting-your-mtb-track-with-r/).
+
+Before to use ggmap, you'll need to get the Google Map API Key and register it, but the procedure is pretty straightforward, [just follow the instructions](https://developers.google.com/maps/documentation/embed/get-api-key). In my code, I always store the keys in a [`yalm` file](https://en.wikipedia.org/wiki/YAML), to avoid accidentaly to publish in the GitHub, [I also commented this strategy in a older post](https://yetanotheriteration.netlify.com/2019/03/comparing-fitbit-and-polar-h7-heart-rate-data/). 
+
 
 ```{r ggmapTest, warning=FALSE, message=FALSE}
 # ggmap
@@ -362,9 +365,9 @@ ggmap(gmap) +
   ggplot2::coord_fixed() 
 ```
 
-## `gganimate package`
+## `gganimate` package
 
-Agora, vamos fazer uma animação usando o `gganimate package`.
+Now the last step is to animate the map in the time dimension, we'll do this using the great [`gganimate` package](https://gganimate.com/articles/gganimate.html), adding a transition function in the `ggplot2/ggmap` stack.
 
 ```{r animation, warning=FALSE, message=FALSE}
 library(gganimate)
@@ -383,18 +386,19 @@ anim <- p  +
   theme( legend.position = "bottom" ) +
   transition_time(revision_date) +
   labs(title="Oil Sighting on Brazil Coast",
-       subtitle = "Date:  {frame_time} - Fonte: IBAMA") +
+       subtitle = "Date:  {frame_time} - source: IBAMA") +
   shadow_wake(wake_length = .15)
 
 anim
 
 ```
 
-## Visualizing the leakage evolution
+## Visualizing the spill evolution in one plot
 
-A visualização animada no mapa dá uma idéia do tamanho do impacto ecológico do vazamento de óleo na costa do Brazil, mas a animação não permite ver todo o intervalo do tempo ao mesmo tempo para avaliar como o vazamento está progredindo.
+The animated map view gives us an idea of the size of the ecological impact of the oil spill off the coast of Brazil, but the animation does not allow you to see the full evolution history at the same time,  to allow us to gauge how the spill is progressing. 
 
-Para tentar visualizar o intevalo todo vamos tentar um outro tipo de gráfico.
+To do this trick, let's plot the information as a heatmap, where each location will be on the Y axis, indexed by its latitude, and on the X axis we'll use the date information.
+
 
 ```{r tileChart}
 
@@ -420,6 +424,6 @@ stains %>%
 
 ```
 
-Neste gráfico, visualizamos o status de avistamento de óleo pelas comunidades ao longo da latitude (sul=mais baixo), e podemos visualizar que as manchas caminham para o Sul ao longo dos meses de outubro e novembro, atingindo o ponto mais extremo, poucos dias antes de dezembro.
+In this graph, we can visualize how the the oil spill are progressing to the south, following the maritime currents, over the months of October and November, reaching the most extreme point a few days,  before December.
 
-A natureza intermitente do gráfico mostra que o registro de status não é feito diariamente em todas as localidades, e algumas comunidades são mais ficalizadas que outras.
+The intermittent nature of the chart shows that information registring is not done daily in all locations, and some communities has more status updates than others we should handle this caracteristic to correctly plot the information, but we'll leave this to other post.
